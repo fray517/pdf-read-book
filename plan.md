@@ -133,6 +133,8 @@
 
 **Готово, если:** один скан-пример даёт текст.
 
+**Сделано:** параметр **`GET /text/{file_id}?ocr=true`** — если на странице мало символов слоя текста (порог ~40), PNG → Vision ([`ocr_vision.py`](simple/app/services/ocr_vision.py), [`pdf_ocr.py`](simple/app/services/pdf_ocr.py)); в ответе **`ocr_pages`**. На фронте чекбокс «OCR для сканов» ([`App.tsx`](simple/frontend/src/App.tsx), [`fetchPdfText`](simple/frontend/src/api.ts)).
+
 ### 3.4 Разбиение на сегменты для озвучки
 
 - Правила: абзацы, максимум N символов на сегмент (лимит TTS).
@@ -140,12 +142,16 @@
 
 **Готово, если:** для длинного текста получаете массив сегментов (можно отдать `GET /segments/{file_id}`).
 
+**Сделано:** [`GET /segments/{file_id}`](simple/app/main.py) (`ocr`, `use_ru`), логика в [`segmentation.py`](simple/app/services/segmentation.py) (лимит ~3500 симв., абзацы); фронт — [`fetchSegments`](simple/frontend/src/api.ts), блок в [`App.tsx`](simple/frontend/src/App.tsx).
+
 ### 3.5 Озвучка (OpenAI TTS)
 
-- Для каждого сегмента — запрос TTS, сохранить mp3 (папка `data/audio/{file_id}/0.mp3`, …).
-- Эндпоинт: `GET /audio/{file_id}/{segment_index}` — отдача файла.
+- Для каждого сегмента — запрос TTS, сохранить mp3 (кэш рядом с хранилищем: `data/audio/{file_id}/{index}_{voice}_{speed}.mp3`, скорость в имени с подчёркиванием вместо точки).
+- Эндпоинт: `GET /audio/{file_id}/{segment_index}` — отдача `audio/mpeg`; query: **`ocr`**, **`use_ru`**, **`voice`** (по умолчанию `alloy`), **`speed`** (0.25–4.0).
 
 **Готово, если:** хотя бы один сегмент играется в браузере (`<audio src=...>`).
+
+**Сделано:** [`GET /audio/{file_id}/{segment_index}`](simple/app/main.py), синтез и кэш в [`tts_mp3.py`](simple/app/services/tts_mp3.py), общая сегментация с `/segments` в [`segment_pipeline.py`](simple/app/services/segment_pipeline.py); фронт — [`getAudioUrl`](simple/frontend/src/api.ts), превью первых 5 сегментов в [`App.tsx`](simple/frontend/src/App.tsx).
 
 ### 3.6 Связка с фронтом (этап 2)
 
@@ -153,6 +159,8 @@
 - Плеер: текущий сегмент + синхронный текст (как раньше в ТЗ — **по сегментам**, не пословно).
 
 **Готово, если:** полный сценарий: загрузка PDF → текст → озвучка с экраном.
+
+**Сделано:** на фронте кнопка **«Озвучить»** ([`App.tsx`](simple/frontend/src/App.tsx)) — `GET /text` (с тем же OCR, что у «Показать текст») → `POST /detect-language` (если ≥ 20 символов; иначе считаем русский и перевод не делаем) → при языке ≠ `ru` — `POST /translate` и сегменты из `_ru.txt` → `GET /segments`; один `<audio>` с автопереходом на следующий сегмент по событию `ended`, блок текста текущего сегмента, кнопки «Назад»/«Вперёд». Ручной сценарий «Показать сегменты» по-прежнему заполняет тот же плеер.
 
 ---
 

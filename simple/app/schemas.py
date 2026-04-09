@@ -26,6 +26,10 @@ class TextResponse(BaseModel):
     full_text: str = Field(
         description="Все страницы подряд, разделены пустой строкой",
     )
+    ocr_pages: list[int] = Field(
+        default_factory=list,
+        description="Номера страниц, где применён Vision OCR (этап 3.3)",
+    )
 
 
 class DetectLanguageRequest(BaseModel):
@@ -58,3 +62,29 @@ class TranslateResponse(BaseModel):
         default=False,
         description="Ответ прочитан из сохранённого файла *_ru.txt",
     )
+
+
+class SegmentItem(BaseModel):
+    """Один сегмент для озвучки."""
+
+    index: int = Field(ge=0, description="Порядковый номер для TTS")
+    page_no: int = Field(
+        ge=0,
+        description="Страница PDF; 0 если сегмент из цельного _ru.txt",
+    )
+    text: str
+    char_count: int = Field(ge=0)
+
+
+class SegmentsResponse(BaseModel):
+    """Список сегментов (этап 3.4)."""
+
+    file_id: str
+    source: str = Field(
+        description="Источник: pdf_pages или ru_file",
+    )
+    max_chars: int = Field(
+        description="Максимум символов на сегмент (лимит TTS)",
+    )
+    segment_count: int = Field(ge=0)
+    segments: list[SegmentItem]

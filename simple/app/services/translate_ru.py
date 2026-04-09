@@ -11,21 +11,13 @@ from openai import (
     RateLimitError,
 )
 
-from app.config import get_settings
 from app.services.detect_language import detect_language_code
+from app.services.openai_client import get_openai_client
 from app.services.pdf_text import extract_text_by_pages, pages_to_full_text
 
 CHAT_MODEL = "gpt-4o-mini"
 # Один запрос для коротких фрагментов; длинные книги — по частям.
 _CHUNK_CHARS = 14_000
-
-
-def get_openai_client() -> OpenAI:
-    """Клиент OpenAI; без ключа не создаётся."""
-    key = get_settings().openai_api_key.strip()
-    if not key:
-        raise RuntimeError("OPENAI_API_KEY не задан в .env")
-    return OpenAI(api_key=key)
 
 
 def _translate_chunk(client: OpenAI, text: str) -> str:

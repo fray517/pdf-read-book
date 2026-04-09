@@ -64,12 +64,17 @@ export type TextResponse = {
   page_count: number;
   pages: PageText[];
   full_text: string;
+  ocr_pages?: number[];
 };
 
 /** GET /text/{file_id} — извлечённый текст PDF. */
-export async function fetchPdfText(fileId: string): Promise<TextResponse> {
+export async function fetchPdfText(
+  fileId: string,
+  options?: { ocr?: boolean },
+): Promise<TextResponse> {
   const enc = encodeURIComponent(fileId);
-  const res = await fetch(`${getApiUrl()}/text/${enc}`);
+  const ocr = options?.ocr === true ? "?ocr=true" : "";
+  const res = await fetch(`${getApiUrl()}/text/${enc}${ocr}`);
   if (!res.ok) {
     throw new Error(await errorMessageFromResponse(res));
   }
@@ -121,4 +126,65 @@ export async function fetchTranslate(
     throw new Error(await errorMessageFromResponse(res));
   }
   return res.json() as Promise<TranslateResult>;
+}
+
+export type SegmentItem = {
+  index: number;
+  page_no: number;
+  text: string;
+  char_count: number;
+};
+
+export type SegmentsResult = {
+  file_id: string;
+  source: string;
+  max_chars: number;
+  segment_count: number;
+  segments: SegmentItem[];
+};
+
+/** GET /segments/{file_id} — сегменты для TTS. */
+export async function fetchSegments(
+  fileId: string,
+  options?: { ocr?: boolean; useRu?: boolean },
+): Promise<SegmentsResult> {
+  const enc = encodeURIComponent(fileId);
+  const p = new URLSearchParams();
+  if (options?.ocr === true) {
+    p.set("ocr", "true");
+  }
+  if (options?.useRu === true) {
+    p.set("use_ru", "true");
+  }
+  const q = p.toString();
+  const suffix = q !== "" ? `?${q}` : "";
+  const res = await fetch(`${getApiUrl()}/segments/${enc}${suffix}`);
+  if (!res.ok) {
+    throw new Error(await errorMessageFromResponse(res));
+  }
+  return res.json() as Promise<SegmentsResult>;
+}
+
+/** GET /audio/{file_id}/{segment_index} — URL для <audio src>. */
+export function getAudioUrl(
+  fileId: string,
+  segmentIndex: number,
+  options: {
+    ocr?: boolean;
+    useRu?: boolean;
+    voice: string;
+    speed: number;
+  },
+): string {
+  const p = new URLSearchParams();
+  if (options.useRu === true) {
+    p.set("use_ru", "true");
+  } else if (options.ocr === true) {
+    p.set("ocr", "true");
+  }
+  p.set("voice", options.voice);
+  p.set("speed", String(options.speed));
+  const enc = encodeURIComponent(fileId);
+  const q = p.toString();
+  return `${getApiUrl()}/audio/${enc}/${segmentIndex}?${q}`;
 }

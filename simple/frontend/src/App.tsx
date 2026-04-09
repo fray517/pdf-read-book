@@ -1,10 +1,18 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import {
   detectLanguage,
   fetchPdfText,
+  fetchSegments,
   fetchTranslate,
   getApiUrl,
+  getAudioUrl,
   uploadPdf,
+  type SegmentsResult,
   type TextResponse,
   type TranslateResult,
   type UploadResult,
@@ -51,6 +59,22 @@ export default function App() {
   const [translateData, setTranslateData] = useState<TranslateResult | null>(
     null,
   );
+  const [useOcr, setUseOcr] = useState(false);
+  const [useRuSegments, setUseRuSegments] = useState(false);
+  const [segmentsLoading, setSegmentsLoading] = useState(false);
+  const [segmentsError, setSegmentsError] = useState<string | null>(null);
+  const [segmentsData, setSegmentsData] = useState<SegmentsResult | null>(
+    null,
+  );
+  const [segmentParams, setSegmentParams] = useState<{
+    ocr: boolean;
+    useRu: boolean;
+  } | null>(null);
+  const [narrateLoading, setNarrateLoading] = useState(false);
+  const [narrateError, setNarrateError] = useState<string | null>(null);
+  const [readerIndex, setReaderIndex] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const advancePlaybackRef = useRef(false);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -76,6 +100,11 @@ export default function App() {
       setLangError(null);
       setTranslateData(null);
       setTranslateError(null);
+      setSegmentsData(null);
+      setSegmentsError(null);
+      setSegmentParams(null);
+      setReaderIndex(0);
+      setNarrateError(null);
     } catch (err) {
       setLastUpload(null);
       setTextData(null);
@@ -83,6 +112,11 @@ export default function App() {
       setLangError(null);
       setTranslateData(null);
       setTranslateError(null);
+      setSegmentsData(null);
+      setSegmentsError(null);
+      setSegmentParams(null);
+      setReaderIndex(0);
+      setNarrateError(null);
       setUploadError(
         err instanceof Error ? err.message : "Ошибка загрузки",
       );
@@ -98,12 +132,19 @@ export default function App() {
     setTextError(null);
     setTextLoading(true);
     try {
-      const data = await fetchPdfText(lastUpload.file_id);
+      const data = await fetchPdfText(lastUpload.file_id, {
+        ocr: useOcr,
+      });
       setTextData(data);
       setDetectedLang(null);
       setLangError(null);
       setTranslateData(null);
       setTranslateError(null);
+      setSegmentsData(null);
+      setSegmentsError(null);
+      setSegmentParams(null);
+      setReaderIndex(0);
+      setNarrateError(null);
     } catch (err) {
       setTextData(null);
       setTextError(
@@ -133,6 +174,34 @@ export default function App() {
     }
   }
 
+  async function handleFetchSegments() {
+    if (lastUpload === null) {
+      return;
+    }
+    setSegmentsError(null);
+    setSegmentsLoading(true);
+    try {
+      const data = await fetchSegments(lastUpload.file_id, {
+        ocr: useRuSegments ? false : useOcr,
+        useRu: useRuSegments,
+      });
+      setSegmentsData(data);
+      setSegmentParams({
+        ocr: useRuSegments ? false : useOcr,
+        useRu: useRuSegments,
+      });
+      setReaderIndex(0);
+    } catch (err) {
+      setSegmentsData(null);
+      setSegmentParams(null);
+      setSegmentsError(
+        err instanceof Error ? err.message : "Ошибка сегментов",
+      );
+    } finally {
+      setSegmentsLoading(false);
+    }
+  }
+
   async function handleTranslate(refresh: boolean) {
     if (lastUpload === null) {
       return;
@@ -151,6 +220,142 @@ export default function App() {
       setTranslateLoading(false);
     }
   }
+
+  async function handleNarrate() {
+    if (lastUpload === null) {
+      return;
+    }
+    setNarrateError(null);
+    setNarrateLoading(true);
+    try {
+      const text = await fetchPdfText(lastUpload.file_id, {
+        ocr: useOcr,
+      });
+      setTextData(text);
+      const trimmed = text.full_text.trim();
+      let lang = "ru";
+      if (trimmed.length >= 20) {
+        const { lang: detected } = await detectLanguage(text.full_text);
+        lang = detected;
+      }
+      setDetectedLang(lang);
+      let segOcr = useOcr;
+      let segUseRu = false;
+      if (trimmed.length >= 20 && lang !== "ru") {
+        const tr = await fetchTranslate(lastUpload.file_id, false);
+        setTranslateData(tr);
+        segUseRu = true;
+        segOcr = false;
+      } else {
+        setTranslateData(null);
+        setTranslateError(null);
+      }
+      setUseRuSegments(segUseRu);
+      const data = await fetchSegments(lastUpload.file_id, {
+        ocr: segOcr,
+        useRu: segUseRu,
+      });
+      setSegmentsData(data);
+      setSegmentParams({
+        ocr: segOcr,
+        useRu: segUseRu,
+      });
+      setSegmentsError(null);
+      setReaderIndex(0);
+    } catch (err) {
+      setNarrateError(
+        err instanceof Error ? err.message : "Ошибка подготовки озвучки",
+      );
+    } finally {
+      setNarrateLoading(false);
+    }
+  }
+
+  const segmentCount = segmentsData?.segment_count ?? 0;
+  const safeReaderIndex =
+    segmentCount > 0
+      ? Math.min(readerIndex, Math.max(0, segmentCount - 1))
+      : 0;
+
+  useEffect(() => {
+    if (segmentCount > 0 && readerIndex > segmentCount - 1) {
+      setReaderIndex(segmentCount - 1);
+    }
+  }, [segmentCount, readerIndex]);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (
+      el === null ||
+      lastUpload === null ||
+      segmentParams === null ||
+      segmentsData === null ||
+      segmentCount === 0
+    ) {
+      return;
+    }
+    const url = getAudioUrl(lastUpload.file_id, safeReaderIndex, {
+      ocr: segmentParams.ocr,
+      useRu: segmentParams.useRu,
+      voice: ttsVoice,
+      speed: speechRate,
+    });
+    el.pause();
+    el.src = url;
+    el.load();
+    const onCanPlay = () => {
+      if (advancePlaybackRef.current) {
+        advancePlaybackRef.current = false;
+        void el.play().catch(() => {});
+      }
+    };
+    el.addEventListener("canplay", onCanPlay, { once: true });
+  }, [
+    lastUpload?.file_id,
+    segmentParams,
+    segmentsData?.segment_count,
+    segmentCount,
+    safeReaderIndex,
+    ttsVoice,
+    speechRate,
+  ]);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (el === null || segmentCount === 0) {
+      return;
+    }
+    const onEnded = () => {
+      setReaderIndex((i) => {
+        if (i < segmentCount - 1) {
+          advancePlaybackRef.current = true;
+          return i + 1;
+        }
+        return i;
+      });
+    };
+    el.addEventListener("ended", onEnded);
+    return () => {
+      el.removeEventListener("ended", onEnded);
+    };
+  }, [segmentCount]);
+
+  function goReaderPrev() {
+    advancePlaybackRef.current = false;
+    setReaderIndex((i) => Math.max(0, i - 1));
+  }
+
+  function goReaderNext() {
+    advancePlaybackRef.current = false;
+    setReaderIndex((i) =>
+      segmentCount > 0 ? Math.min(segmentCount - 1, i + 1) : i,
+    );
+  }
+
+  const currentSegment = segmentsData?.segments.find(
+    (s) => s.index === safeReaderIndex,
+  );
+  const currentSegmentText = currentSegment?.text ?? "";
 
   return (
     <div className="app">
@@ -174,7 +379,7 @@ export default function App() {
 
       <main className="content">
         <p className="lead">
-          PDF: загрузка, текст, озвучка (2.x), язык и перевод (3.x).
+          PDF: загрузка, текст, перевод, сегменты, читалка (2.x–3.6).
         </p>
         <p className="meta">
           API: <code>{apiUrl}</code>
@@ -182,11 +387,11 @@ export default function App() {
 
         <section className="tts-panel" aria-labelledby="tts-heading">
           <h2 id="tts-heading" className="tts-panel-title">
-            Озвучка (пока только UI)
+            Озвучка (OpenAI TTS)
           </h2>
           <p className="tts-hint">
-            Для этапа 3: скорость и голос OpenAI TTS; на сервер пока не
-            отправляются.
+            Скорость и голос передаются в <code>GET /audio/…</code> (этап 3.5–
+            3.6).
           </p>
           <div className="tts-row">
             <label className="tts-label" htmlFor="speech-rate">
@@ -273,6 +478,15 @@ export default function App() {
               <strong>Имя файла:</strong>{" "}
               <span className="break-all">{lastUpload.filename}</span>
             </p>
+            <label className="ocr-option">
+              <input
+                type="checkbox"
+                checked={useOcr}
+                onChange={(e) => setUseOcr(e.target.checked)}
+                disabled={textLoading}
+              />{" "}
+              OCR для сканов (OpenAI Vision, этап 3.3)
+            </label>
             <button
               type="button"
               className="btn-secondary"
@@ -282,6 +496,85 @@ export default function App() {
               {textLoading ? "Загрузка текста…" : "Показать текст"}
             </button>
           </div>
+        ) : null}
+
+        {lastUpload !== null ? (
+          <section
+            className="reader-panel"
+            aria-labelledby="reader-heading"
+          >
+            <h2 id="reader-heading" className="reader-panel-title">
+              Читалка (3.6)
+            </h2>
+            <p className="tts-hint">
+              Кнопка «Озвучить»: извлечение текста (как у «Показать текст», с
+              учётом OCR), язык, при необходимости перевод, сегменты. Плеер
+              показывает текст текущего фрагмента; после окончания трека
+              воспроизводится следующий сегмент.
+            </p>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={handleNarrate}
+              disabled={narrateLoading}
+            >
+              {narrateLoading ? "Подготовка озвучки…" : "Озвучить"}
+            </button>
+            {narrateError !== null ? (
+              <p className="error" role="alert">
+                {narrateError}
+              </p>
+            ) : null}
+            {segmentParams !== null &&
+            segmentsData !== null &&
+            segmentCount > 0 ? (
+              <div className="reader-body">
+                <p className="reader-meta" aria-live="polite">
+                  Сегмент {safeReaderIndex + 1} из {segmentCount}
+                  {currentSegment !== undefined &&
+                  currentSegment.page_no > 0
+                    ? ` · стр. ${currentSegment.page_no}`
+                    : null}
+                </p>
+                <div
+                  className="reader-text-block"
+                  aria-label="Текст текущего сегмента"
+                >
+                  {currentSegmentText}
+                </div>
+                <audio
+                  ref={audioRef}
+                  className="reader-audio"
+                  controls
+                  preload="metadata"
+                  aria-label="Озвучка текущего сегмента"
+                />
+                <div className="reader-nav">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={goReaderPrev}
+                    disabled={safeReaderIndex <= 0}
+                  >
+                    Назад
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={goReaderNext}
+                    disabled={safeReaderIndex >= segmentCount - 1}
+                  >
+                    Вперёд
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            {segmentParams !== null &&
+            segmentsData !== null &&
+            segmentCount === 0 ? (
+              <p className="tts-hint">Нет сегментов для озвучки.</p>
+            ) : null}
+          </section>
         ) : null}
 
         {lastUpload !== null ? (
@@ -338,6 +631,80 @@ export default function App() {
           </section>
         ) : null}
 
+        {lastUpload !== null ? (
+          <section
+            className="segments-panel"
+            aria-labelledby="segments-heading"
+          >
+            <h2 id="segments-heading" className="translate-panel-title">
+              Сегменты для озвучки (3.4)
+            </h2>
+            <p className="tts-hint">
+              Абзацы и лимит длины на сегмент (для TTS). Для русского текста
+              включите опцию перевода — нужен файл <code>_ru.txt</code>.
+            </p>
+            <label className="ocr-option">
+              <input
+                type="checkbox"
+                checked={useRuSegments}
+                onChange={(e) => setUseRuSegments(e.target.checked)}
+                disabled={segmentsLoading}
+              />{" "}
+              Брать текст из перевода (_ru.txt)
+            </label>
+            {useRuSegments ? null : (
+              <label className="ocr-option">
+                <input
+                  type="checkbox"
+                  checked={useOcr}
+                  onChange={(e) => setUseOcr(e.target.checked)}
+                  disabled={segmentsLoading}
+                />{" "}
+                Как при «Показать текст»: OCR для сканов
+              </label>
+            )}
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleFetchSegments}
+              disabled={segmentsLoading}
+            >
+              {segmentsLoading ? "Сегменты…" : "Показать сегменты"}
+            </button>
+            {segmentsError !== null ? (
+              <p className="error" role="alert">
+                {segmentsError}
+              </p>
+            ) : null}
+            {segmentsData !== null ? (
+              <>
+                <p className="text-meta">
+                  Сегментов: {segmentsData.segment_count} · источник:{" "}
+                  <code>{segmentsData.source}</code> · лимит{" "}
+                  {segmentsData.max_chars} симв.
+                </p>
+                <pre
+                  className="tts-json"
+                  aria-label="Список сегментов (превью)"
+                >
+                  {JSON.stringify(
+                    {
+                      ...segmentsData,
+                      segments: segmentsData.segments.slice(0, 20),
+                      _preview_remaining:
+                        segmentsData.segment_count > 20
+                          ? segmentsData.segment_count - 20
+                          : undefined,
+                    },
+                    null,
+                    2,
+                  )}
+                </pre>
+              </>
+            ) : null}
+          </section>
+        ) : null}
+
         {textError !== null ? (
           <p className="error" role="alert">
             {textError}
@@ -352,6 +719,14 @@ export default function App() {
             <p className="text-meta">
               Страниц: {textData.page_count} · символов:{" "}
               {textData.full_text.length}
+              {textData.ocr_pages !== undefined &&
+              textData.ocr_pages.length > 0 ? (
+                <>
+                  {" "}
+                  · OCR страниц:{" "}
+                  {textData.ocr_pages.join(", ")}
+                </>
+              ) : null}
             </p>
             <textarea
               className="text-area"
