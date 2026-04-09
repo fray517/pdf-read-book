@@ -1,17 +1,27 @@
-"""Точка входа FastAPI — этапы 1.1–1.5."""
+"""Точка входа FastAPI — этапы 1.x–3.x."""
 
+import asyncio
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, File, HTTPException, UploadFile, status
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
-from app.schemas import PageText, TextResponse, UploadResponse
+from app.schemas import (
+    DetectLanguageRequest,
+    DetectLanguageResponse,
+    PageText,
+    TextResponse,
+    TranslateResponse,
+    UploadResponse,
+)
+from app.services.detect_language import detect_language_code
 from app.services.pdf_text import extract_text_by_pages, pages_to_full_text
-from app.storage_paths import resolved_pdf_path
+from app.services.translate_ru import build_russian_text, load_pdf_full_text
+from app.storage_paths import resolved_pdf_path, resolved_ru_txt_path
 
 app = FastAPI(
     title="PDF Reader (простой)",
@@ -97,6 +107,83 @@ async def get_text(file_id: str) -> TextResponse:
         page_count=len(pages),
         pages=pages,
         full_text=full_text,
+    )
+
+
+@app.post("/detect-language", response_model=DetectLanguageResponse)
+async def detect_language(
+    body: DetectLanguageRequest,
+) -> DetectLanguageResponse:
+    """Определяет язык по переданному тексту (начало анализируется на сервере)."""
+    try:
+        lang = detect_language_code(body.text)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    return DetectLanguageResponse(lang=lang)
+
+
+@app.post("/translate/{file_id}", response_model=TranslateResponse)
+async def translate_to_russian(
+    file_id: str,
+    refresh: bool = Query(
+        False,
+        description="Пересчитать перевод, игнорируя сохранённый _ru.txt",
+    ),
+) -> TranslateResponse:
+    """Переводит извлечённый текст PDF на русский; сохраняет `{file_id}_ru.txt`."""
+    settings = get_settings()
+    pdf_path = resolved_pdf_path(settings.storage_path, file_id)
+    if not pdf_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Файл не найден. Сначала загрузите PDF через POST /upload.",
+        )
+    ru_path = resolved_ru_txt_path(settings.storage_path, file_id)
+
+    if ru_path.is_file() and not refresh:
+
+        def _read_cached() -> tuple[str, str]:
+            body = ru_path.read_text(encoding="utf-8")
+            try:
+                ft = load_pdf_full_text(pdf_path)
+                src = detect_language_code(ft)
+            except ValueError:
+                src = "und"
+            return body, src
+
+        text_ru, src_lang = await asyncio.to_thread(_read_cached)
+        return TranslateResponse(
+            file_id=file_id,
+            text=text_ru,
+            source_lang=src_lang,
+            cached=True,
+        )
+
+    try:
+        ru_text, src_lang = await asyncio.to_thread(
+            build_russian_text,
+            pdf_path,
+            ru_path,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
+    return TranslateResponse(
+        file_id=file_id,
+        text=ru_text,
+        source_lang=src_lang,
+        cached=False,
     )
 
 

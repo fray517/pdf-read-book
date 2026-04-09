@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import {
+  detectLanguage,
   fetchPdfText,
+  fetchTranslate,
   getApiUrl,
   uploadPdf,
   type TextResponse,
+  type TranslateResult,
   type UploadResult,
 } from "./api";
 import {
@@ -40,6 +43,14 @@ export default function App() {
   const [textData, setTextData] = useState<TextResponse | null>(null);
   const [speechRate, setSpeechRate] = useState(TTS_SPEED_DEFAULT);
   const [ttsVoice, setTtsVoice] = useState<OpenAiTtsVoice>(TTS_VOICE_DEFAULT);
+  const [langLoading, setLangLoading] = useState(false);
+  const [langError, setLangError] = useState<string | null>(null);
+  const [detectedLang, setDetectedLang] = useState<string | null>(null);
+  const [translateLoading, setTranslateLoading] = useState(false);
+  const [translateError, setTranslateError] = useState<string | null>(null);
+  const [translateData, setTranslateData] = useState<TranslateResult | null>(
+    null,
+  );
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -61,9 +72,17 @@ export default function App() {
       setLastUpload(data);
       setTextData(null);
       setTextError(null);
+      setDetectedLang(null);
+      setLangError(null);
+      setTranslateData(null);
+      setTranslateError(null);
     } catch (err) {
       setLastUpload(null);
       setTextData(null);
+      setDetectedLang(null);
+      setLangError(null);
+      setTranslateData(null);
+      setTranslateError(null);
       setUploadError(
         err instanceof Error ? err.message : "Ошибка загрузки",
       );
@@ -81,6 +100,10 @@ export default function App() {
     try {
       const data = await fetchPdfText(lastUpload.file_id);
       setTextData(data);
+      setDetectedLang(null);
+      setLangError(null);
+      setTranslateData(null);
+      setTranslateError(null);
     } catch (err) {
       setTextData(null);
       setTextError(
@@ -88,6 +111,44 @@ export default function App() {
       );
     } finally {
       setTextLoading(false);
+    }
+  }
+
+  async function handleDetectLanguage() {
+    if (textData === null) {
+      return;
+    }
+    setLangError(null);
+    setLangLoading(true);
+    try {
+      const { lang } = await detectLanguage(textData.full_text);
+      setDetectedLang(lang);
+    } catch (err) {
+      setDetectedLang(null);
+      setLangError(
+        err instanceof Error ? err.message : "Ошибка определения языка",
+      );
+    } finally {
+      setLangLoading(false);
+    }
+  }
+
+  async function handleTranslate(refresh: boolean) {
+    if (lastUpload === null) {
+      return;
+    }
+    setTranslateError(null);
+    setTranslateLoading(true);
+    try {
+      const data = await fetchTranslate(lastUpload.file_id, refresh);
+      setTranslateData(data);
+    } catch (err) {
+      setTranslateData(null);
+      setTranslateError(
+        err instanceof Error ? err.message : "Ошибка перевода",
+      );
+    } finally {
+      setTranslateLoading(false);
     }
   }
 
@@ -113,7 +174,7 @@ export default function App() {
 
       <main className="content">
         <p className="lead">
-          PDF: загрузка, текст, настройки озвучки (этапы 2.2–2.4).
+          PDF: загрузка, текст, озвучка (2.x), язык и перевод (3.x).
         </p>
         <p className="meta">
           API: <code>{apiUrl}</code>
@@ -223,6 +284,60 @@ export default function App() {
           </div>
         ) : null}
 
+        {lastUpload !== null ? (
+          <section
+            className="translate-panel"
+            aria-labelledby="translate-heading"
+          >
+            <h2 id="translate-heading" className="translate-panel-title">
+              Перевод на русский (3.2)
+            </h2>
+            <p className="tts-hint">
+              Текст снова извлекается из PDF на сервере; для не‑русского
+              нужен <code>OPENAI_API_KEY</code> в <code>simple/.env</code>.
+            </p>
+            <div className="lang-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => handleTranslate(false)}
+                disabled={translateLoading}
+              >
+                {translateLoading ? "Перевод…" : "Перевести на русский"}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => handleTranslate(true)}
+                disabled={translateLoading}
+              >
+                Обновить перевод
+              </button>
+            </div>
+            {translateError !== null ? (
+              <p className="error" role="alert">
+                {translateError}
+              </p>
+            ) : null}
+            {translateData !== null ? (
+              <>
+                <p className="text-meta">
+                  Исходный язык: <code>{translateData.source_lang}</code>
+                  {translateData.cached ? " · из кэша (_ru.txt)" : null}
+                </p>
+                <textarea
+                  className="text-area"
+                  readOnly
+                  rows={12}
+                  value={translateData.text}
+                  spellCheck={false}
+                  aria-label="Перевод на русский"
+                />
+              </>
+            ) : null}
+          </section>
+        ) : null}
+
         {textError !== null ? (
           <p className="error" role="alert">
             {textError}
@@ -246,6 +361,27 @@ export default function App() {
               spellCheck={false}
               aria-label="Извлечённый текст PDF"
             />
+            <div className="lang-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleDetectLanguage}
+                disabled={langLoading || textData.full_text.length < 20}
+              >
+                {langLoading ? "Определение…" : "Определить язык"}
+              </button>
+              {detectedLang !== null ? (
+                <p className="lang-result">
+                  Язык (ISO 639-1):{" "}
+                  <code>{detectedLang}</code>
+                </p>
+              ) : null}
+            </div>
+            {langError !== null ? (
+              <p className="error" role="alert">
+                {langError}
+              </p>
+            ) : null}
           </section>
         ) : null}
 

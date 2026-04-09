@@ -9,22 +9,29 @@ export function getApiUrl(): string {
 }
 
 async function errorMessageFromResponse(res: Response): Promise<string> {
-  let message = res.statusText;
+  const fallback = res.statusText;
   try {
     const data: unknown = await res.json();
-    if (
-      typeof data === "object" &&
-      data !== null &&
-      "detail" in data
-    ) {
-      const d = (data as { detail: unknown }).detail;
-      message =
-        typeof d === "string" ? d : JSON.stringify(d);
+    if (typeof data !== "object" || data === null || !("detail" in data)) {
+      return fallback;
     }
+    const d = (data as { detail: unknown }).detail;
+    if (typeof d === "string") {
+      return d;
+    }
+    if (Array.isArray(d)) {
+      const parts = d.map((item) => {
+        if (item && typeof item === "object" && "msg" in item) {
+          return String((item as { msg: unknown }).msg);
+        }
+        return JSON.stringify(item);
+      });
+      return parts.join("; ");
+    }
+    return JSON.stringify(d);
   } catch {
-    /* оставляем statusText */
+    return fallback;
   }
-  return message;
 }
 
 export type UploadResult = {
@@ -67,4 +74,51 @@ export async function fetchPdfText(fileId: string): Promise<TextResponse> {
     throw new Error(await errorMessageFromResponse(res));
   }
   return res.json() as Promise<TextResponse>;
+}
+
+export type DetectLanguageResult = {
+  lang: string;
+};
+
+/** Как `app/services/detect_language.py` — анализ только начала. */
+const DETECT_LANGUAGE_SAMPLE_CHARS = 2000;
+
+/** POST /detect-language — тело `{ "text": "..." }`. */
+export async function detectLanguage(
+  text: string,
+): Promise<DetectLanguageResult> {
+  const safe = text == null ? "" : String(text);
+  const sample = safe.slice(0, DETECT_LANGUAGE_SAMPLE_CHARS);
+  const res = await fetch(`${getApiUrl()}/detect-language`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: sample }),
+  });
+  if (!res.ok) {
+    throw new Error(await errorMessageFromResponse(res));
+  }
+  return res.json() as Promise<DetectLanguageResult>;
+}
+
+export type TranslateResult = {
+  file_id: string;
+  text: string;
+  source_lang: string;
+  cached: boolean;
+};
+
+/** POST /translate/{file_id} — перевод на русский, кэш в *_ru.txt. */
+export async function fetchTranslate(
+  fileId: string,
+  refresh = false,
+): Promise<TranslateResult> {
+  const enc = encodeURIComponent(fileId);
+  const q = refresh ? "?refresh=true" : "";
+  const res = await fetch(`${getApiUrl()}/translate/${enc}${q}`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    throw new Error(await errorMessageFromResponse(res));
+  }
+  return res.json() as Promise<TranslateResult>;
 }

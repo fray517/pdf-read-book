@@ -115,12 +115,16 @@
 
 **Готово, если:** для короткого русского и английского фрагмента ответ правдоподобный.
 
+**Сделано:** `POST /detect-language` ([`simple/app/main.py`](simple/app/main.py)), [`langdetect`](simple/app/services/detect_language.py) по началу текста; на фронте кнопка после текста ([`App.tsx`](simple/frontend/src/App.tsx)), [`detectLanguage`](simple/frontend/src/api.ts).
+
 ### 3.2 Перевод на русский (если не русский)
 
 - Если язык не `ru` — один запрос к Chat Completions: перевод технического текста, сохранить результат (в памяти или файл `..._ru.txt` рядом с PDF).
 - Эндпоинт: `POST /translate/{file_id}` → текст на русском.
 
 **Готово, если:** для английского абзаца получаете русский текст в ответе/API.
+
+**Сделано:** `POST /translate/{file_id}` ([`main.py`](simple/app/main.py)), кэш `{file_id}_ru.txt`, перевод через OpenAI при языке ≠ `ru` ([`translate_ru.py`](simple/app/services/translate_ru.py)); фронт — [`fetchTranslate`](simple/frontend/src/api.ts), блок в [`App.tsx`](simple/frontend/src/App.tsx).
 
 ### 3.3 OCR для «пустых» страниц (сканы)
 
