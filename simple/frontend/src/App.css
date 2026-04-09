@@ -51,6 +51,72 @@
   margin-top: 0.25rem;
 }
 
+.tts-panel {
+  margin: 1.25rem 0;
+  padding: 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.tts-panel-title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.tts-hint {
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.tts-row {
+  margin-bottom: 0.85rem;
+}
+
+.tts-row:last-of-type {
+  margin-bottom: 0.65rem;
+}
+
+.tts-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.tts-range {
+  width: 100%;
+  max-width: 20rem;
+  accent-color: var(--accent-range, #2563eb);
+}
+
+.tts-select {
+  display: block;
+  max-width: 20rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+.tts-json {
+  margin: 0.75rem 0 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  overflow-x: auto;
+}
+
 .upload {
   margin: 1.25rem 0;
   padding: 1rem;
@@ -115,6 +181,62 @@
 
 .upload-result p {
   margin: 0.35rem 0;
+}
+
+.upload-result .btn-secondary {
+  margin-top: 0.75rem;
+}
+
+.btn-secondary {
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.text-panel {
+  margin: 1.25rem 0;
+}
+
+.text-panel-title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.text-meta {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.text-area {
+  width: 100%;
+  max-width: 100%;
+  min-height: 12rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  resize: vertical;
+  box-sizing: border-box;
 }
 
 .error {
