@@ -1,0 +1,143 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.top h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.theme-toggle {
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  filter: brightness(1.05);
+}
+
+.content {
+  flex: 1;
+  padding: 1.5rem 1.25rem;
+  max-width: 40rem;
+}
+
+.lead {
+  font-size: 1.05rem;
+  margin-top: 0;
+}
+
+.meta {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.upload {
+  margin: 1.25rem 0;
+  padding: 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.upload-title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.btn-primary {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--accent, #3b82f6);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn-primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+:root[data-theme="dark"] .btn-primary {
+  --accent: #2563eb;
+}
+
+:root[data-theme="light"] .btn-primary {
+  --accent: #2563eb;
+}
+
+.upload-result {
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.upload-result p {
+  margin: 0.35rem 0;
+}
+
+.error {
+  margin: 0.75rem 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, #ef4444 15%, transparent);
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, #ef4444 40%, transparent);
+}
+
+.break-all {
+  word-break: break-all;
+}
+
+.hint {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+code {
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--code-bg);
+}

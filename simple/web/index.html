@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PDF Reader — заглушка (этап 1.5)</title>
+  <style>
+    :root {
+      --bg: #121418;
+      --fg: #e8eaed;
+      --muted: #9aa3af;
+      --link: #8ab4ff;
+    }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.5;
+      max-width: 40rem;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+    h1 { font-size: 1.35rem; }
+    p { color: var(--muted); }
+    ul { padding-left: 1.2rem; }
+    a { color: var(--link); }
+  </style>
+</head>
+<body>
+  <h1>Техчиталка (простой backend)</h1>
+  <p>Сервер работает. Это статическая заглушка до этапа 2 (React).</p>
+  <ul>
+    <li><a href="/docs">Документация API (Swagger)</a></li>
+    <li><a href="/health">GET /health</a></li>
+    <li><a href="/config/status">GET /config/status</a></li>
+  </ul>
+  <p>Загрузка и текст PDF — через <code>/upload</code> и <code>/text/…</code> в Swagger.</p>
+</body>
+</html>
